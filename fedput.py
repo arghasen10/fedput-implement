@@ -21,14 +21,14 @@ import matplotlib.pyplot as plt
 import os
 
 
-def timeseries_data(data, history_window, future_window):
+def timeseries_data(data, history_window, future_window, corr_index = 11):
     X = []
     Y = []
     i = 0
     while (i < len(data) - history_window - future_window + 1):
         temp_df = data[i:i + history_window]
         ### 11 here is the column index of target variable(throughput)===================>.
-        target_variable = np.mean(data[i + history_window:i + history_window + future_window, 11])
+        target_variable = np.mean(data[i + history_window:i + history_window + future_window, corr_index])
         X.append(temp_df)
         Y.append(target_variable)
 
@@ -36,6 +36,22 @@ def timeseries_data(data, history_window, future_window):
     X = np.array(X)
     Y = np.array(Y)
     return X, Y
+
+
+def preprocess_data_5G(data, test_split):
+    data = data[['speed', 'rssi_strongest', 'dist', 'Throughput tcp']]
+
+    train = data.iloc[0:int((1 - test_split) * data.shape[0])]
+    test = data.iloc[int((1 - test_split) * data.shape[0]):]
+
+    sc = StandardScaler()
+    train = sc.fit_transform(train)
+    test = sc.transform(test)
+
+    ####(5,1 are the History window , future window size)=>
+    x_train, y_train = timeseries_data(train, 5, 1, 3)
+    x_test, y_test = timeseries_data(test, 5, 1, 3)
+    return sc, x_train, y_train, x_test, y_test
 
 
 def preprocess_data(data, test_split):
@@ -130,15 +146,22 @@ def collect_4G_data():
     return users
 
 
-### sigma , H, F : self explanatory
+def collect_simulated_5G_data():
+    root = './dataset/dataset5G/'
+    ls = os.listdir(root)
+    users = []
+    for l in ls:
+        path = root + l + '/dataset.csv'
+        data = pd.read_csv(path)
+        sc, x_train, y_train, x_test, y_test = preprocess_data_5G(data, 0.3)
+        users.append([sc, x_train, y_train, x_test, y_test])
+    return users
+
 
 def score(user_model, final_wts, user, sigma, H, F):
     user_model.set_weights(user_model.get_weights())
     layers = user_model.layers
 
-    ### THE PARAMETER IN range() CONTROLS the layer upto which federated aggregation is carried out , default : 2
-    ### MODEL ARCHITECTURE FOR LAYER INDEX. (0=> first lstm layer , 1=> dropout , 2=> second lstm layer , 3=> dropout,
-    ### 4=> fully connected)
     for i in range(2):
         layers[i].set_weights(final_wts[i])
 
@@ -176,6 +199,7 @@ def score(user_model, final_wts, user, sigma, H, F):
     print(metrics.r2_score(yorg, y3))
     print(np.corrcoef(yorg, y3))
     return
+
 
 #
 # users = collect_4G_data()
