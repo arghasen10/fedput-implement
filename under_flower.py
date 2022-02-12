@@ -12,12 +12,12 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 if __name__ == "__main__":
     root = './dataset/labelencoded4Gdatasets/'
     paths = os.listdir(root)
-    users = fedput.collect_4G_data()
+    users4G = fedput.collect_4G_data()
     users5G = fedput.collect_simulated_5G_data()
     usersLumos = fedput.collect_data_lumos()
     usersMN = fedput.collect_mn_wild()
     usersIrish = fedput.collect_data_irish()
-    users = users + users5G + usersIrish + usersMN + usersLumos
+    users = [*users4G, *users5G, *usersIrish, *usersMN, *usersLumos]
     print('users length:  ', len(users))
     model = fedput.create_model()
     model.compile(optimizer='adam', loss='msle')
