@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 import os
 
 
-def timeseries_data(data, history_window, future_window, corr_index = 11):
+def timeseries_data(data, history_window, future_window, corr_index):
     X = []
     Y = []
     i = 0
@@ -39,7 +39,7 @@ def timeseries_data(data, history_window, future_window, corr_index = 11):
 
 
 def preprocess_data_5G(data, test_split):
-    data = data[['speed', 'rssi_strongest', 'dist', 'Throughput tcp']]
+    data = data[['speed', 'rssi_strongest', 'Throughput tcp']]
 
     train = data.iloc[0:int((1 - test_split) * data.shape[0])]
     test = data.iloc[int((1 - test_split) * data.shape[0]):]
@@ -49,37 +49,14 @@ def preprocess_data_5G(data, test_split):
     test = sc.transform(test)
 
     ####(5,1 are the History window , future window size)=>
-    x_train, y_train = timeseries_data(train, 5, 1, 3)
-    x_test, y_test = timeseries_data(test, 5, 1, 3)
-    return sc, x_train, y_train, x_test, y_test
-
-
-def preprocess_data(data, test_split):
-    ### Features used in the dataset ==>
-    data = data[
-        ['latitude', 'longitude', 'speed', 'net_type', 'data_state', 'data_act', 'gsm_neighbors', 'umts_neighbors',
-         'lte_neighbors', 'rssi_strongest', 'dist', 'Throughput tcp']]
-
-    # x = np.array(data['Throughput tcp'])
-    # y3 = gaussian_filter1d(x, sigma, order=0)
-    # data['Throughput tcp'] = y3
-
-    train = data.iloc[0:int((1 - test_split) * data.shape[0])]
-    test = data.iloc[int((1 - test_split) * data.shape[0]):]
-
-    sc = StandardScaler()
-    train = sc.fit_transform(train)
-    test = sc.transform(test)
-
-    ####(5,1 are the History window , future window size)=>
-    x_train, y_train = timeseries_data(train, 5, 1)
-    x_test, y_test = timeseries_data(test, 5, 1)
+    x_train, y_train = timeseries_data(train, 5, 1, 2)
+    x_test, y_test = timeseries_data(test, 5, 1, 2)
     return sc, x_train, y_train, x_test, y_test
 
 
 def create_model():
     model = Sequential()
-    model.add(LSTM(128, return_sequences=True, input_shape=(5, 12)))
+    model.add(LSTM(128, return_sequences=True, input_shape=(5, 3)))
     model.add(Dropout(0.2))
     model.add(LSTM(128))
 
@@ -140,7 +117,7 @@ def collect_4G_data():
     for path in ls:
         fullpath = root + path
         data = pd.read_csv(fullpath)
-        sc, x_train, y_train, x_test, y_test = preprocess_data(data, 0.3)
+        sc, x_train, y_train, x_test, y_test = preprocess_data_5G(data, 0.3)
         users.append([sc, x_train, y_train, x_test, y_test])
 
     return users
@@ -158,7 +135,7 @@ def collect_simulated_5G_data():
     return users
 
 
-def collect_data_irish(type=1):
+def collect_data_irish():
     files = [x for x in
              os.listdir('dataset/5G-production-dataset/Amazon_Prime/Driving/animated-AdventureTime')]
     files2 = [x for x in
@@ -174,46 +151,32 @@ def collect_data_irish(type=1):
         try:
             path = rootPathToIrish + file
             df = pd.read_csv(path, usecols=cols)
-            df.dropna(inplace=True)
-            data_irish.append(df)
         except:
             path = rootPathToIrish2 + file
             df = pd.read_csv(path, usecols=cols)
-            df.dropna(inplace=True)
-            data_irish.append(df)
-    df_irish = pd.concat(data_irish, axis=0, ignore_index=True)
-    df_irish.dropna(inplace=True)
-    df_irish['Handover'] = df_irish['CellID'].diff()
-    df_irish['Handover'][df_irish['Handover'] != 0] = 1
-    if type == 0:
-        df_irish = df_irish[['Speed', 'RSRP', 'RSRQ', 'NRxRSRP', 'NRxRSRQ', 'DL_bitrate']]
-        df_irish.columns = ['Speed', 'lte_rsrp', 'lte_rsrq', 'nr_rsrp', 'nr_rsrq', 'Throughput']
-        df_irish1 = df_irish[pd.to_numeric(df_irish.nr_rsrq, errors='coerce').isnull()]
-        df_irish.drop(df_irish1.index, inplace=True)
-        df_irish1 = df_irish[pd.to_numeric(df_irish.lte_rsrq, errors='coerce').isnull()]
-        df_irish.drop(df_irish1.index, inplace=True)
-    else:
-        df_irish = df_irish[['Speed', 'Handover', 'RSRP', 'DL_bitrate']]
-        df_irish.columns = ['Speed', 'Handover', 'lte_rsrp', 'Throughput']
-    # print(df_irish.head())
-    return df_irish
+        df.dropna(inplace=True)
+        df['Handover'] = df['CellID'].diff()
+        df['Handover'][df['Handover'] != 0] = 1
+
+        df = df[['Speed', 'RSRP', 'DL_bitrate']]
+        df.columns = ['speed', 'rssi_strongest', 'Throughput tcp']
+        sc, x_train, y_train, x_test, y_test = preprocess_data_5G(df, 0.3)
+        data_irish.append([sc, x_train, y_train, x_test, y_test])
+
+    return data_irish
 
 
-def collect_data_lumos(type=1):
+def collect_data_lumos():
     column_name_2 = ['movingSpeed', 'lte_rssi', 'lte_rsrp', 'lte_rsrq', 'lte_rssnr', 'nr_ssRsrp', 'nr_ssRsrq',
                      'Throughput', 'tower_id']
     data_lumos = pd.read_csv('dataset/Lumos5G-v1.0/Lumos5G-v1.0.csv', usecols=[5, 8, 9, 10, 11, 12, 13, 15, 18])
     data_lumos.dropna(inplace=True)
     data_lumos['Handover'] = data_lumos['tower_id'].diff()
     data_lumos['Handover'][data_lumos['Handover'] != 0] = 1
-    if type == 0:
-        data_lumos = data_lumos[['movingSpeed', 'lte_rsrp', 'lte_rsrq', 'nr_ssRsrp', 'nr_ssRsrq', 'Throughput']]
-        data_lumos.columns = ['Speed', 'lte_rsrp', 'lte_rsrq', 'nr_rsrp', 'nr_rsrq', 'Throughput']
-    else:
-        data_lumos = data_lumos[['movingSpeed', 'Handover', 'lte_rsrp', 'Throughput']]
-        data_lumos.columns = ['Speed', 'Handover', 'lte_rsrp', 'Throughput']
-    # print(data_lumos.head())
-    return data_lumos
+    data_lumos = data_lumos[['movingSpeed', 'lte_rsrp', 'Throughput']]
+    data_lumos.columns = ['speed', 'rssi_strongest', 'Throughput tcp']
+    sc, x_train, y_train, x_test, y_test = preprocess_data_5G(data_lumos, 0.3)
+    return [sc, x_train, y_train, x_test, y_test]
 
 
 def collect_mn_wild():
@@ -227,13 +190,14 @@ def collect_mn_wild():
         rootpath = 'dataset/merged-logs/'
         path = rootpath + fileName
         dataWild = pd.read_csv(path)
-        data_all.append(dataWild)
-        df_5Gwild = pd.concat(data_all, axis=0, ignore_index=True)
-        df_5Gwild.dropna(inplace=True)
+        dataWild.dropna(inplace=True)
 
-        mnWild = df_5Gwild[['movingSpeed', 'rsrp', 'nr_ssRsrp_avg', 'Throughput']]
-        mnWild.columns = ['Speed', 'lte_rsrp', 'nr_rsrp', 'Throughput']
-        return mnWild
+        mnWild = dataWild[['movingSpeed', 'nr_ssRsrp_avg', 'Throughput']]
+        mnWild.columns = ['speed', 'rssi_strongest', 'Throughput tcp']
+        sc, x_train, y_train, x_test, y_test = preprocess_data_5G(mnWild, 0.3)
+        data_all.append([sc, x_train, y_train, x_test, y_test])
+
+    return data_all
 
 
 def score(user_model, final_wts, user, sigma, H, F):
@@ -289,4 +253,3 @@ def score(user_model, final_wts, user, sigma, H, F):
 # for user in users:
 #     score(user_models[i], final_wts, users[i], 1, 5, 10)
 #     i+=1
-

@@ -17,13 +17,15 @@ if __name__ == "__main__":
     usersLumos = fedput.collect_data_lumos()
     usersMN = fedput.collect_mn_wild()
     usersIrish = fedput.collect_data_irish()
-    users = [*users4G, *users5G, *usersIrish, *usersMN, *usersLumos]
+    users = [*users4G, *users5G, *usersMN, *usersIrish, usersLumos]
     print('users length:  ', len(users))
+
+    user = users[int(sys.argv[1])]
+    print(user[1].shape)
+
     model = fedput.create_model()
     model.compile(optimizer='adam', loss='msle')
     print(model.summary())
-
-    user = users[int(sys.argv[1])]
 
     # Define Flower client
     class CifarClient(fl.client.NumPyClient):
@@ -32,7 +34,7 @@ if __name__ == "__main__":
 
         def fit(self, parameters, config):  # type: ignore
             model.set_weights(parameters)
-            model.fit(user[1], user[2], epochs=25, batch_size=16, validation_data=(user[3], user[4]), shuffle=False)
+            model.fit(user[1], user[2], epochs=25, batch_size=256, validation_data=(user[3], user[4]), shuffle=False)
             return model.get_weights(), len(user[1]), {}
 
         def evaluate(self, parameters, config):  # type: ignore
