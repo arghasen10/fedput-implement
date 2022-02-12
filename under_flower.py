@@ -14,7 +14,11 @@ if __name__ == "__main__":
     paths = os.listdir(root)
     users = fedput.collect_4G_data()
     users5G = fedput.collect_simulated_5G_data()
-    users = users + users5G
+    usersLumos = fedput.collect_data_lumos()
+    usersMN = fedput.collect_mn_wild()
+    usersIrish = fedput.collect_data_irish()
+    users = users + users5G + usersIrish + usersMN + usersLumos
+    print('users length:  ', len(users))
     model = fedput.create_model()
     model.compile(optimizer='adam', loss='msle')
     print(model.summary())

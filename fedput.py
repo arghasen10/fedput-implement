@@ -158,6 +158,84 @@ def collect_simulated_5G_data():
     return users
 
 
+def collect_data_irish(type=1):
+    files = [x for x in
+             os.listdir('dataset/5G-production-dataset/Amazon_Prime/Driving/animated-AdventureTime')]
+    files2 = [x for x in
+              os.listdir('dataset/5G-production-dataset/Amazon_Prime/Driving/Season3-TheExpanse')]
+    for file in files2:
+        files.append(file)
+    column_name = ['Speed', 'CellID', 'RSRP', 'RSRQ', 'SNR', 'RSSI', 'DL_bitrate', 'NRxRSRP', 'NRxRSRQ']
+    cols = [3, 5, 7, 8, 9, 11, 12, 24, 25]
+    data_irish = []
+    for file in files:
+        rootPathToIrish = 'dataset/5G-production-dataset/Amazon_Prime/Driving/animated-AdventureTime/'
+        rootPathToIrish2 = 'dataset/5G-production-dataset/Amazon_Prime/Driving/Season3-TheExpanse/'
+        try:
+            path = rootPathToIrish + file
+            df = pd.read_csv(path, usecols=cols)
+            df.dropna(inplace=True)
+            data_irish.append(df)
+        except:
+            path = rootPathToIrish2 + file
+            df = pd.read_csv(path, usecols=cols)
+            df.dropna(inplace=True)
+            data_irish.append(df)
+    df_irish = pd.concat(data_irish, axis=0, ignore_index=True)
+    df_irish.dropna(inplace=True)
+    df_irish['Handover'] = df_irish['CellID'].diff()
+    df_irish['Handover'][df_irish['Handover'] != 0] = 1
+    if type == 0:
+        df_irish = df_irish[['Speed', 'RSRP', 'RSRQ', 'NRxRSRP', 'NRxRSRQ', 'DL_bitrate']]
+        df_irish.columns = ['Speed', 'lte_rsrp', 'lte_rsrq', 'nr_rsrp', 'nr_rsrq', 'Throughput']
+        df_irish1 = df_irish[pd.to_numeric(df_irish.nr_rsrq, errors='coerce').isnull()]
+        df_irish.drop(df_irish1.index, inplace=True)
+        df_irish1 = df_irish[pd.to_numeric(df_irish.lte_rsrq, errors='coerce').isnull()]
+        df_irish.drop(df_irish1.index, inplace=True)
+    else:
+        df_irish = df_irish[['Speed', 'Handover', 'RSRP', 'DL_bitrate']]
+        df_irish.columns = ['Speed', 'Handover', 'lte_rsrp', 'Throughput']
+    # print(df_irish.head())
+    return df_irish
+
+
+def collect_data_lumos(type=1):
+    column_name_2 = ['movingSpeed', 'lte_rssi', 'lte_rsrp', 'lte_rsrq', 'lte_rssnr', 'nr_ssRsrp', 'nr_ssRsrq',
+                     'Throughput', 'tower_id']
+    data_lumos = pd.read_csv('dataset/Lumos5G-v1.0/Lumos5G-v1.0.csv', usecols=[5, 8, 9, 10, 11, 12, 13, 15, 18])
+    data_lumos.dropna(inplace=True)
+    data_lumos['Handover'] = data_lumos['tower_id'].diff()
+    data_lumos['Handover'][data_lumos['Handover'] != 0] = 1
+    if type == 0:
+        data_lumos = data_lumos[['movingSpeed', 'lte_rsrp', 'lte_rsrq', 'nr_ssRsrp', 'nr_ssRsrq', 'Throughput']]
+        data_lumos.columns = ['Speed', 'lte_rsrp', 'lte_rsrq', 'nr_rsrp', 'nr_rsrq', 'Throughput']
+    else:
+        data_lumos = data_lumos[['movingSpeed', 'Handover', 'lte_rsrp', 'Throughput']]
+        data_lumos.columns = ['Speed', 'Handover', 'lte_rsrp', 'Throughput']
+    # print(data_lumos.head())
+    return data_lumos
+
+
+def collect_mn_wild():
+    files = [x for x in os.listdir('dataset/merged-logs/')]
+    mnfiles = []
+    for file in files:
+        if file[0:5] == 'S20UP':
+            mnfiles.append(file)
+    data_all = []
+    for fileName in mnfiles:
+        rootpath = 'dataset/merged-logs/'
+        path = rootpath + fileName
+        dataWild = pd.read_csv(path)
+        data_all.append(dataWild)
+        df_5Gwild = pd.concat(data_all, axis=0, ignore_index=True)
+        df_5Gwild.dropna(inplace=True)
+
+        mnWild = df_5Gwild[['movingSpeed', 'rsrp', 'nr_ssRsrp_avg', 'Throughput']]
+        mnWild.columns = ['Speed', 'lte_rsrp', 'nr_rsrp', 'Throughput']
+        return mnWild
+
+
 def score(user_model, final_wts, user, sigma, H, F):
     user_model.set_weights(user_model.get_weights())
     layers = user_model.layers
