@@ -1,16 +1,19 @@
+import collections
+
 import pandas as pd
 import numpy as np
+import tensorflow as tf
 from scipy.ndimage import gaussian_filter1d
 from collections import Counter
 from sklearn.preprocessing import StandardScaler
-from keras.models import Sequential
-from keras.layers import Dense
-from keras.layers import LSTM
-from keras.layers import Dropout
-from keras.models import Model
-from keras.layers import Input
-from keras.layers import BatchNormalization
-from keras.layers import Activation
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.layers import LSTM
+from tensorflow.keras.layers import Dropout
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Input
+from tensorflow.keras.layers import BatchNormalization
+from tensorflow.keras.layers import Activation
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
 from matplotlib import pyplot
@@ -21,11 +24,84 @@ import matplotlib.pyplot as plt
 import os
 
 
+class WindowGenerator:
+    def __init__(self, input_width, label_width, shift,
+                 train_df, label_columns=None):
+        # Store the raw data.
+        self.train_df = train_df
+
+        # Work out the label column indices.
+        self.label_columns = label_columns
+        if label_columns is not None:
+            self.label_columns_indices = {name: i for i, name in
+                                          enumerate(label_columns)}
+        self.column_indices = {name: i for i, name in
+                               enumerate(train_df.columns)}
+
+        # Work out the window parameters.
+        self.input_width = input_width
+        self.label_width = label_width
+        self.shift = shift
+
+        self.total_window_size = input_width + shift
+
+        self.input_slice = slice(0, input_width)
+        self.input_indices = np.arange(self.total_window_size)[self.input_slice]
+
+        self.label_start = self.total_window_size - self.label_width
+        self.labels_slice = slice(self.label_start, None)
+        self.label_indices = np.arange(self.total_window_size)[self.labels_slice]
+
+    def __repr__(self):
+        return '\n'.join([
+            f'Total window size: {self.total_window_size}',
+            f'Input indices: {self.input_indices}',
+            f'Label indices: {self.label_indices}',
+            f'Label column name(s): {self.label_columns}'])
+
+    def split_window(self, features):
+        inputs = features[:, self.input_slice, :]
+        labels = features[:, self.labels_slice, :]
+        if self.label_columns is not None:
+            labels = tf.stack(
+                [labels[:, :, self.column_indices[name]] for name in self.label_columns],
+                axis=-1)
+
+        # Slicing doesn't preserve static shape information, so set the shapes
+        # manually. This way the `tf.data.Datasets` are easier to inspect.
+        inputs.set_shape([None, self.input_width, None])
+        labels.set_shape([None, self.label_width, None])
+
+        return inputs, labels
+
+    def make_dataset(self, data):
+        data = np.array(data, dtype=np.float64)
+        ds = tf.keras.preprocessing.timeseries_dataset_from_array(
+            data=data,
+            targets=None,
+            sequence_length=self.total_window_size,
+            sequence_stride=1,
+            shuffle=True,
+            batch_size=32, )
+
+        ds = ds.map(self.split_window)
+
+        return ds
+
+
+@property
+def train(self):
+    return self.make_dataset(self.train_df)
+
+
+WindowGenerator.train = train
+
+
 def timeseries_data(data, history_window, future_window, corr_index):
     X = []
     Y = []
     i = 0
-    while (i < len(data) - history_window - future_window + 1):
+    while i < len(data) - history_window - future_window + 1:
         temp_df = data[i:i + history_window]
         ### 11 here is the column index of target variable(throughput)===================>.
         target_variable = np.mean(data[i + history_window:i + history_window + future_window, corr_index])
@@ -39,19 +115,25 @@ def timeseries_data(data, history_window, future_window, corr_index):
 
 
 def preprocess_data_5G(data, test_split):
-    data = data[['speed', 'rssi_strongest', 'Throughput tcp']]
+    data = data[['speed', 'rssi_strongest', 'Throughput']]
 
     train = data.iloc[0:int((1 - test_split) * data.shape[0])]
-    test = data.iloc[int((1 - test_split) * data.shape[0]):]
 
-    sc = StandardScaler()
-    train = sc.fit_transform(train)
-    test = sc.transform(test)
+    w2 = WindowGenerator(input_width=5, label_width=1, shift=1, train_df=train,
+                         label_columns=['Throughput'])
 
-    ####(5,1 are the History window , future window size)=>
-    x_train, y_train = timeseries_data(train, 5, 1, 2)
-    x_test, y_test = timeseries_data(test, 5, 1, 2)
-    return sc, x_train, y_train, x_test, y_test
+    return w2.train
+    # sc = StandardScaler()
+    # train = sc.fit_transform(train)
+    # test = sc.transform(test)
+    #
+    # train_data = tf.expand_dims(train, axis=-1)
+    # test_data = tf.expand_dims(test, axis=-1)
+    #
+    # train_dataset = ts_data_generator(train_data, 5)
+    # test_dataset = ts_data_generator(test_data, 5)
+    # # return sc, x_train, y_train, x_test, y_test
+    # return train_dataset, test_dataset
 
 
 def create_model():
@@ -117,8 +199,9 @@ def collect_4G_data():
     for path in ls:
         fullpath = root + path
         data = pd.read_csv(fullpath)
-        sc, x_train, y_train, x_test, y_test = preprocess_data_5G(data, 0.3)
-        users.append([sc, x_train, y_train, x_test, y_test])
+        data = data[['speed', 'rssi_strongest', 'Throughput tcp']]
+        data.columns = ['speed', 'rssi_strongest', 'Throughput']
+        users.append(data)
 
     return users
 
@@ -130,8 +213,9 @@ def collect_simulated_5G_data():
     for l in ls:
         path = root + l + '/dataset.csv'
         data = pd.read_csv(path)
-        sc, x_train, y_train, x_test, y_test = preprocess_data_5G(data, 0.3)
-        users.append([sc, x_train, y_train, x_test, y_test])
+        data = data[['speed', 'rssi_strongest', 'Throughput tcp']]
+        data.columns = ['speed', 'rssi_strongest', 'Throughput']
+        users.append(data)
     return users
 
 
@@ -155,15 +239,19 @@ def collect_data_irish():
             path = rootPathToIrish2 + file
             df = pd.read_csv(path, usecols=cols)
         df.dropna(inplace=True)
-        df['Handover'] = df['CellID'].diff()
-        df['Handover'][df['Handover'] != 0] = 1
-
         df = df[['Speed', 'RSRP', 'DL_bitrate']]
-        df.columns = ['speed', 'rssi_strongest', 'Throughput tcp']
-        sc, x_train, y_train, x_test, y_test = preprocess_data_5G(df, 0.3)
-        data_irish.append([sc, x_train, y_train, x_test, y_test])
+        df.columns = ['speed', 'rssi_strongest', 'Throughput']
+        data_irish.append(df)
 
     return data_irish
+
+
+def get_tensor():
+    data_lumos = pd.read_csv('dataset/Lumos5G-v1.0/Lumos5G-v1.0.csv')
+    data_lumos = data_lumos[['movingSpeed', 'lte_rsrp', 'Throughput']]
+    data_lumos.columns = ['speed', 'rssi_strongest', 'Throughput']
+    ds = tf.data.Dataset.from_tensor_slices(dict(data_lumos))
+    return ds
 
 
 def collect_data_lumos():
@@ -171,12 +259,9 @@ def collect_data_lumos():
                      'Throughput', 'tower_id']
     data_lumos = pd.read_csv('dataset/Lumos5G-v1.0/Lumos5G-v1.0.csv', usecols=[5, 8, 9, 10, 11, 12, 13, 15, 18])
     data_lumos.dropna(inplace=True)
-    data_lumos['Handover'] = data_lumos['tower_id'].diff()
-    data_lumos['Handover'][data_lumos['Handover'] != 0] = 1
     data_lumos = data_lumos[['movingSpeed', 'lte_rsrp', 'Throughput']]
-    data_lumos.columns = ['speed', 'rssi_strongest', 'Throughput tcp']
-    sc, x_train, y_train, x_test, y_test = preprocess_data_5G(data_lumos, 0.3)
-    return [sc, x_train, y_train, x_test, y_test]
+    data_lumos.columns = ['speed', 'rssi_strongest', 'Throughput']
+    return data_lumos
 
 
 def collect_mn_wild():
@@ -193,9 +278,8 @@ def collect_mn_wild():
         dataWild.dropna(inplace=True)
 
         mnWild = dataWild[['movingSpeed', 'nr_ssRsrp_avg', 'Throughput']]
-        mnWild.columns = ['speed', 'rssi_strongest', 'Throughput tcp']
-        sc, x_train, y_train, x_test, y_test = preprocess_data_5G(mnWild, 0.3)
-        data_all.append([sc, x_train, y_train, x_test, y_test])
+        mnWild.columns = ['speed', 'rssi_strongest', 'Throughput']
+        data_all.append(mnWild)
 
     return data_all
 
@@ -243,6 +327,22 @@ def score(user_model, final_wts, user, sigma, H, F):
     return
 
 
+def create_df_datasets():
+    tf_datasets = []
+    users4G = collect_4G_data()
+    users5GSimu = collect_simulated_5G_data()
+    usersLumos = collect_data_lumos()
+    usersIrish = collect_data_irish()
+    usersMN = collect_mn_wild()
+    users = [*users4G, *users5GSimu, *usersIrish, *usersMN, usersLumos]
+    for user in users:
+        tf_dataset = preprocess_data_5G(user, 0.1)
+        tf_datasets.append(tf_dataset)
+
+    return tf_datasets
+
+
+# Expanding data into tensors
 #
 # users = collect_4G_data()
 #
