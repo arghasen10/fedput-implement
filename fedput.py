@@ -144,7 +144,7 @@ def create_model():
 
     model.add(Dropout(0.2))
     model.add(Dense(1))
-    sgd = optimizers.SGD(lr=0.3)
+    sgd = optimizers.SGD(learning_rate=0.3)
 
     # print(model.summary())
     return model

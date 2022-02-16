@@ -63,7 +63,7 @@ class WindowGenerator:
             sequence_length=self.total_window_size,
             sequence_stride=1,
             shuffle=True,
-            batch_size=32, )
+            batch_size=5, )
 
         ds = ds.map(self.split_window)
 
@@ -83,7 +83,6 @@ def test(self):
 WindowGenerator.train = train
 WindowGenerator.test = test
 
-
 lumos = fedput.collect_data_lumos()
 column_indices = {name: i for i, name in enumerate(lumos.columns)}
 
@@ -92,7 +91,29 @@ train_df = lumos[0:int(n * 0.7)]
 test_df = lumos[int(n * 0.7):]
 
 num_features = lumos.shape[1]
-w2 = WindowGenerator(input_width=5, label_width=1, shift=1,train_df=train_df, test_df=test_df,
+w2 = WindowGenerator(input_width=5, label_width=1, shift=1, train_df=train_df, test_df=test_df,
                      label_columns=['Throughput'])
 
-print(w2.train)
+tfds = w2.train
+
+X_train = list(map(lambda x: x[0], tfds))
+y_train = list(map(lambda x: x[-1], tfds))
+y_train = np.array(y_train)
+
+
+# print('X_train', np.array(X_train))
+
+def elemt_arr(y_train):
+    val = []
+    for e in y_train:
+        for j in e:
+            for k in j:
+                ele = []
+                for l in k:
+                    ele.append(l)
+                    val.append(ele)
+    return np.array(val)
+
+
+val = elemt_arr(y_train)
+print(val)

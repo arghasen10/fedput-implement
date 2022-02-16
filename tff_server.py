@@ -6,6 +6,7 @@ import numpy as np
 import tensorflow as tf
 import tensorflow_federated as tff
 import fedput
+import sklearn
 
 tf.executing_eagerly()
 
@@ -27,8 +28,7 @@ def model_fn():
         #         b=tf.TensorSpec(shape=[None, 1], dtype=tf.float64)),
         #     y=tf.TensorSpec(shape=[None, 1], dtype=tf.float64)),
         input_spec=federated_train_data[0].element_spec,
-        loss=tf.keras.losses.MeanSquaredLogarithmicError(),
-        metrics=[tf.keras.metrics.Accuracy()]
+        loss=tf.keras.losses.MeanSquaredLogarithmicError()
     )
 
 
@@ -145,9 +145,7 @@ fed_avg = tff.learning.build_federated_averaging_process(
 
 state = fed_avg.initialize()
 state, metrics = fed_avg.next(state, federated_train_data)
-train_metrics = metrics['train']
-print('loss={l:.3f}, accuracy={a:.3f}'.format(
-    l=train_metrics['loss'], a=train_metrics['accuracy']))
+print('loss=', metrics)
 
 NUM_ROUNDS = 10
 
@@ -157,11 +155,14 @@ def keras_evaluate(state, round_num):
     # use its standard `.evaluate()` method.
     keras_model = fedput.create_model()
     keras_model.compile(
-        loss=tf.keras.losses.MeanSquaredLogarithmicError(),
-        metrics=[tf.keras.metrics.Accuracy()])
+        loss=tf.keras.losses.MeanSquaredLogarithmicError())
     state.model.assign_weights_to(keras_model)
-    # loss, accuracy = keras_model.evaluate(federated_train_data)
-    # print('\tEval: loss={l:.3f}, accuracy={a:.3f}'.format(l=loss, a=accuracy))
+    min_res = 10000000000
+    for i in range(0, len(federated_train_data)):
+        res = keras_model.evaluate(federated_train_data[i])
+        if res < min_res:
+            min_res = res
+    print('\tEval: loss={l:.3f}'.format(l=res))
 
 
 for round_num in range(NUM_ROUNDS):
@@ -169,8 +170,7 @@ for round_num in range(NUM_ROUNDS):
     keras_evaluate(state, round_num)
     state, metrics = fed_avg.next(state, federated_train_data)
     train_metrics = metrics['train']
-    print('\tTrain: loss={l:.3f}, accuracy={a:.3f}'.format(
-        l=train_metrics['loss'], a=train_metrics['accuracy']))
+    print('\tTrain: loss={l:.3f}'.format(l=train_metrics['loss']))
 
 print('Final evaluation')
 keras_evaluate(state, NUM_ROUNDS + 1)
