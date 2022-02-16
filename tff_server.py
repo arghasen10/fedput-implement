@@ -31,6 +31,7 @@ def model_fn():
         metrics=[tf.keras.metrics.Accuracy()]
     )
 
+
 #
 # @tff.tf_computation
 # def server_init():
@@ -147,3 +148,29 @@ state, metrics = fed_avg.next(state, federated_train_data)
 train_metrics = metrics['train']
 print('loss={l:.3f}, accuracy={a:.3f}'.format(
     l=train_metrics['loss'], a=train_metrics['accuracy']))
+
+NUM_ROUNDS = 10
+
+
+def keras_evaluate(state, round_num):
+    # Take our global model weights and push them back into a Keras model to
+    # use its standard `.evaluate()` method.
+    keras_model = fedput.create_model()
+    keras_model.compile(
+        loss=tf.keras.losses.MeanSquaredLogarithmicError(),
+        metrics=[tf.keras.metrics.Accuracy()])
+    state.model.assign_weights_to(keras_model)
+    loss, accuracy = keras_model.evaluate(federated_train_data, steps=2, verbose=0)
+    print('\tEval: loss={l:.3f}, accuracy={a:.3f}'.format(l=loss, a=accuracy))
+
+
+for round_num in range(NUM_ROUNDS):
+    print('Round {r}'.format(r=round_num))
+    keras_evaluate(state, round_num)
+    state, metrics = fed_avg.next(state, federated_train_data)
+    train_metrics = metrics['train']
+    print('\tTrain: loss={l:.3f}, accuracy={a:.3f}'.format(
+        l=train_metrics['loss'], a=train_metrics['accuracy']))
+
+print('Final evaluation')
+keras_evaluate(state, NUM_ROUNDS + 1)
