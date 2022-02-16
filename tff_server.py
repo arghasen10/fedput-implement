@@ -162,7 +162,7 @@ def keras_evaluate(state, round_num):
         res = keras_model.evaluate(federated_train_data[i])
         if res < min_res:
             min_res = res
-    print('\tEval: loss={l:.3f}'.format(l=res))
+    print('\tEval: loss={l:.3f}'.format(l=min_res))
 
 
 for round_num in range(NUM_ROUNDS):
