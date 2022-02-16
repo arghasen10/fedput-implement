@@ -141,7 +141,7 @@ def model_fn():
 
 fed_avg = tff.learning.build_federated_averaging_process(
     model_fn=model_fn,
-    client_optimizer_fn=lambda: tf.keras.optimizers.SGD(lr=0.3))
+    client_optimizer_fn=lambda: tf.keras.optimizers.SGD(learning_rate=0.3))
 
 state = fed_avg.initialize()
 state, metrics = fed_avg.next(state, federated_train_data)
@@ -160,8 +160,8 @@ def keras_evaluate(state, round_num):
         loss=tf.keras.losses.MeanSquaredLogarithmicError(),
         metrics=[tf.keras.metrics.Accuracy()])
     state.model.assign_weights_to(keras_model)
-    loss, accuracy = keras_model.evaluate(federated_train_data, steps=2, verbose=0)
-    print('\tEval: loss={l:.3f}, accuracy={a:.3f}'.format(l=loss, a=accuracy))
+    # loss, accuracy = keras_model.evaluate(federated_train_data)
+    # print('\tEval: loss={l:.3f}, accuracy={a:.3f}'.format(l=loss, a=accuracy))
 
 
 for round_num in range(NUM_ROUNDS):
