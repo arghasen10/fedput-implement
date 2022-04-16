@@ -28,7 +28,8 @@ def model_fn():
         #         b=tf.TensorSpec(shape=[None, 1], dtype=tf.float64)),
         #     y=tf.TensorSpec(shape=[None, 1], dtype=tf.float64)),
         input_spec=federated_train_data[0].element_spec,
-        loss=tf.keras.losses.MeanSquaredLogarithmicError()
+        loss=tf.keras.losses.MeanSquaredLogarithmicError(),
+        metrics=[tf.keras.metrics.Accuracy()]
     )
 
 
@@ -170,7 +171,13 @@ for round_num in range(NUM_ROUNDS):
     keras_evaluate(state, round_num)
     state, metrics = fed_avg.next(state, federated_train_data)
     train_metrics = metrics['train']
-    print('\tTrain: loss={l:.3f}'.format(l=train_metrics['loss']))
+    # print('\tTrain: loss={l:.3f}'.format(l=train_metrics['loss']))
+    # print('\tTrain: accuracy={l:.3f}'.format(l=train_metrics['accuracy']))
+    print('train_metrics', train_metrics)
 
 print('Final evaluation')
 keras_evaluate(state, NUM_ROUNDS + 1)
+
+evaluator = tff.learning.build_federated_evaluation(model_fn)
+federated_metrics = evaluator(state.model, federated_train_data)
+print(federated_metrics)
